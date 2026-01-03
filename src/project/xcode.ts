@@ -127,22 +127,21 @@ export async function generateXcodeProject(options: XcodeProjectOptions): Promis
   const primaryPlatform = options.platforms.includes('ios') ? 'ios' : 'macos';
   const isIOS = primaryPlatform === 'ios';
   
-  // For iOS, we need an embed frameworks phase
+  // For both iOS and macOS, we need an embed frameworks phase to copy XCFramework into app bundle
   let embedFrameworksPhaseUUID: string | undefined;
   let embedFrameworksBuildFileUUID: string | undefined;
   
-  if (isIOS) {
-    embedFrameworksPhaseUUID = generateUUID();
-    embedFrameworksBuildFileUUID = generateUUID();
-    
-    buildFiles[embedFrameworksBuildFileUUID] = {
-      isa: 'PBXBuildFile',
-      fileRef: obsydianFrameworkRefUUID,
-      settings: {
-        ATTRIBUTES: ['CodeSignOnCopy', 'RemoveHeadersOnCopy'],
-      },
-    };
-  }
+  // Both iOS and macOS need frameworks embedded in the app bundle
+  embedFrameworksPhaseUUID = generateUUID();
+  embedFrameworksBuildFileUUID = generateUUID();
+  
+  buildFiles[embedFrameworksBuildFileUUID] = {
+    isa: 'PBXBuildFile',
+    fileRef: obsydianFrameworkRefUUID,
+    settings: {
+      ATTRIBUTES: ['CodeSignOnCopy', 'RemoveHeadersOnCopy'],
+    },
+  };
 
   for (const filePath of sourceFiles) {
     const fileRefUUID = generateUUID();
@@ -273,6 +272,8 @@ export async function generateXcodeProject(options: XcodeProjectOptions): Promis
     baseBuildSettings.SDKROOT = 'macosx';
     // Framework only supports arm64, so only build for active architecture
     baseBuildSettings.ONLY_ACTIVE_ARCH = 'YES';
+    baseBuildSettings.ARCHS = 'arm64';
+    baseBuildSettings.EXCLUDED_ARCHS = 'x86_64';
   }
   
   // Framework is REQUIRED - always add framework search paths and linking
@@ -419,6 +420,7 @@ export async function generateXcodeProject(options: XcodeProjectOptions): Promis
       GCC_OPTIMIZATION_LEVEL: '0',
       GCC_PREPROCESSOR_DEFINITIONS: ['DEBUG=1', '$(inherited)'],
       ONLY_ACTIVE_ARCH: 'YES',
+      ...(primaryPlatform === 'macos' ? { ARCHS: 'arm64', EXCLUDED_ARCHS: 'x86_64' } : {}),
     },
   };
 
@@ -430,6 +432,7 @@ export async function generateXcodeProject(options: XcodeProjectOptions): Promis
       DEBUG_INFORMATION_FORMAT: 'dwarf-with-dsym',
       ENABLE_NS_ASSERTIONS: 'NO',
       VALIDATE_PRODUCT: 'YES',
+      ...(primaryPlatform === 'macos' ? { ARCHS: 'arm64', EXCLUDED_ARCHS: 'x86_64' } : {}),
     },
   };
 
@@ -455,14 +458,14 @@ export async function generateXcodeProject(options: XcodeProjectOptions): Promis
     runOnlyForDeploymentPostprocessing: 0,
   };
   
-  // Embed Frameworks phase for iOS (required for XCFrameworks)
+  // Embed Frameworks phase (required for XCFrameworks on both iOS and macOS)
   let embedFrameworksPhase: any = undefined;
-  if (isIOS && embedFrameworksPhaseUUID && embedFrameworksBuildFileUUID) {
+  if (embedFrameworksPhaseUUID && embedFrameworksBuildFileUUID) {
     embedFrameworksPhase = {
       isa: 'PBXCopyFilesBuildPhase',
       buildActionMask: 2147483647,
       dstPath: '',
-      dstSubfolderSpec: 10, // Frameworks folder
+      dstSubfolderSpec: isIOS ? 10 : 10, // 10 = Frameworks folder for both platforms
       files: [embedFrameworksBuildFileUUID],
       name: 'Embed Frameworks',
       runOnlyForDeploymentPostprocessing: 0,
@@ -484,9 +487,9 @@ export async function generateXcodeProject(options: XcodeProjectOptions): Promis
     defaultConfigurationName: 'Release',
   };
 
-  // Native target - include embed phase for iOS
+  // Native target - include embed phase for both iOS and macOS
   const buildPhases = [sourcesPhaseUUID, frameworksPhaseUUID, resourcesPhaseUUID];
-  if (isIOS && embedFrameworksPhaseUUID) {
+  if (embedFrameworksPhaseUUID) {
     buildPhases.push(embedFrameworksPhaseUUID);
   }
   
@@ -570,8 +573,8 @@ export async function generateXcodeProject(options: XcodeProjectOptions): Promis
     ...buildFiles,
   };
   
-  // Add embed frameworks phase for iOS
-  if (isIOS && embedFrameworksPhaseUUID && embedFrameworksPhase) {
+  // Add embed frameworks phase (for both iOS and macOS)
+  if (embedFrameworksPhaseUUID && embedFrameworksPhase) {
     objects[embedFrameworksPhaseUUID] = embedFrameworksPhase;
     if (embedFrameworksBuildFileUUID) {
       // Already added to buildFiles above
