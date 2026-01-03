@@ -11,7 +11,6 @@ import chalk from 'chalk';
 import Log from '../utils/log.js';
 import { promptText, promptSelect, promptMultiSelect, promptConfirm } from '../utils/prompts.js';
 import { createDefaultConfig, writeConfig, type Platform } from '../project/config.js';
-import { generateMainCpp } from '../project/templates/main-cpp.js';
 import { generateMainWithFramework } from '../project/templates/main-with-framework.js';
 import { generateInfoPlist } from '../project/templates/info-plist.js';
 import { generateEntitlements } from '../project/templates/entitlements.js';
@@ -85,48 +84,34 @@ export const initCommand = new Command('init')
     try {
       await fs.ensureDir(projectDir);
 
-      // Ask if user wants to use Obsydian framework
-      let frameworkPath: string | undefined;
-      let frameworkVersion: string | undefined;
+      // Framework is REQUIRED - Obsydian CLI only supports framework-based apps
+      Log.log('Downloading Obsydian framework...');
+      let frameworkPath: string;
+      let frameworkVersion: string;
       
-      const useFramework = await promptConfirm(
-        'Use Obsydian framework? (provides UI components like Window, Button, etc.)',
-        true
-      );
-      
-      if (useFramework) {
-        try {
-          frameworkVersion = await getLatestFrameworkVersion();
-          Log.log(`Latest framework version: ${frameworkVersion}`);
-          
-          frameworkPath = await downloadFrameworkWithCache(frameworkVersion, projectDir);
-          
-          // Update config with framework info
-          const config = createDefaultConfig(projectName, bundleId, platforms, options?.teamId);
-          config.framework = {
-            version: frameworkVersion,
-            source: 'github',
-          };
-          await writeConfig(projectDir, config);
-        } catch (error: any) {
-          Log.warn(`Could not download framework: ${error.message}`);
-          Log.log('Creating project without framework. You can add it later.');
-          
-          const config = createDefaultConfig(projectName, bundleId, platforms, options?.teamId);
-          await writeConfig(projectDir, config);
-        }
-      } else {
-        // Create obsydian.json config without framework
+      try {
+        frameworkVersion = await getLatestFrameworkVersion();
+        Log.log(`Latest framework version: ${frameworkVersion}`);
+        
+        frameworkPath = await downloadFrameworkWithCache(frameworkVersion, projectDir);
+        
+        // Create config with framework info
         const config = createDefaultConfig(projectName, bundleId, platforms, options?.teamId);
+        config.framework = {
+          version: frameworkVersion,
+          source: 'github',
+        };
         await writeConfig(projectDir, config);
+      } catch (error: any) {
+        Log.error(`Failed to download framework: ${error.message}`);
+        Log.error('Framework is required. Please check your internet connection and try again.');
+        process.exit(1);
       }
 
-      // Create main.m (Objective-C source)
-      // Use framework-aware template if framework is installed
-      const mainSource = frameworkPath 
-        ? generateMainWithFramework(projectName)
-        : generateMainCpp(projectName);
-      await fs.writeFile(path.join(projectDir, 'main.m'), mainSource);
+      // Create main.mm using framework template (framework is always required)
+      // Use .mm extension for Objective-C++ since framework uses C++
+      const mainSource = generateMainWithFramework(projectName);
+      await fs.writeFile(path.join(projectDir, 'main.mm'), mainSource);
 
       // Create Info.plist for Apple platforms
       if (platforms.includes('macos') || platforms.includes('ios')) {
@@ -157,7 +142,7 @@ export const initCommand = new Command('init')
           projectName,
           bundleId,
           platforms,
-          sourceFiles: ['main.m'],
+          sourceFiles: ['main.mm'],
           infoPlistPath: 'Info.plist',
           entitlementsPath: platforms.includes('macos') ? 'entitlements.plist' : undefined,
           teamId: options?.teamId,

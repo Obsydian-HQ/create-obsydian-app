@@ -13,6 +13,7 @@ import { buildCommand } from './commands/build.js';
 import { submitCommand } from './commands/submit.js';
 import { runCommand } from './commands/run.js';
 import { credentialsCommand } from './commands/credentials.js';
+import { frameworkCommand } from './commands/framework.js';
 
 const program = new Command();
 
@@ -27,5 +28,6 @@ program.addCommand(buildCommand);
 program.addCommand(runCommand);
 program.addCommand(submitCommand);
 program.addCommand(credentialsCommand);
+program.addCommand(frameworkCommand);
 
 program.parse();

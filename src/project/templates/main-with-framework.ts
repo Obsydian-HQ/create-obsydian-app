@@ -12,6 +12,7 @@ export function generateMainWithFramework(projectName: string): string {
 
 #include <obsidian/obsidian.h>
 #import <Cocoa/Cocoa.h>
+#include <iostream>
 
 using namespace obsidian;
 

@@ -31,24 +31,42 @@ export interface FrameworkManifest {
 export async function getLatestFrameworkVersion(): Promise<string> {
   try {
     const url = `${GITHUB_API_BASE}/repos/${FRAMEWORKS_REPO}/releases/latest`;
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'obsydian-cli',
+      },
+    });
     
     if (!response.ok) {
       if (response.status === 404) {
-        // No releases yet - return a default version for development
-        Log.warn('No framework releases found. Using development version.');
-        return '0.1.0';
+        throw new Error(
+          'No framework releases found. Please ensure the framework has been released.\n' +
+          `Repository: ${FRAMEWORKS_REPO}`
+        );
       }
-      throw new Error(`Failed to fetch latest release: ${response.statusText}`);
+      if (response.status === 403) {
+        throw new Error(
+          'GitHub API rate limit exceeded or access denied.\n' +
+          'Please check your internet connection and try again later.'
+        );
+      }
+      throw new Error(`Failed to fetch latest release: ${response.status} ${response.statusText}`);
     }
     
-    const data = await response.json() as { tag_name: string };
+    const data = await response.json() as { tag_name: string; name?: string };
     const version = data.tag_name.replace(/^v/, ''); // Remove 'v' prefix
+    
+    if (!version || !version.match(/^\d+\.\d+\.\d+/)) {
+      throw new Error(`Invalid version format: ${data.tag_name}`);
+    }
+    
     return version;
   } catch (error: any) {
-    Log.warn(`Could not fetch latest framework version: ${error.message}`);
-    // Return default version for development/testing
-    return '0.1.0';
+    if (error.message.includes('No framework releases')) {
+      throw error;
+    }
+    throw new Error(`Failed to fetch latest framework version: ${error.message}`);
   }
 }
 
@@ -111,6 +129,27 @@ async function verifyChecksum(filePath: string, expectedChecksum: string): Promi
 }
 
 /**
+ * Validate framework structure
+ */
+async function validateFramework(frameworkPath: string): Promise<void> {
+  const infoPlistPath = path.join(frameworkPath, 'Info.plist');
+  if (!await fs.pathExists(infoPlistPath)) {
+    throw new Error('Invalid framework: Info.plist not found');
+  }
+  
+  // Check for at least one platform slice
+  const platformDirs = await fs.readdir(frameworkPath);
+  const hasPlatform = platformDirs.some(dir => 
+    dir.match(/^(macos|ios)-/i) && 
+    fs.pathExistsSync(path.join(frameworkPath, dir, 'Obsydian.framework'))
+  );
+  
+  if (!hasPlatform) {
+    throw new Error('Invalid framework: No platform slices found');
+  }
+}
+
+/**
  * Download and extract framework
  */
 export async function downloadFramework(
@@ -129,16 +168,25 @@ export async function downloadFramework(
   // Download framework zip
   const zipPath = path.join(outputDir, 'Obsydian.xcframework.zip');
   Log.log(`Downloading from: ${manifest.download_url}`);
+  Log.dim(`Size: ${(manifest.size / 1024 / 1024).toFixed(2)} MB`);
   
-  await downloadFile(manifest.download_url, zipPath);
+  try {
+    await downloadFile(manifest.download_url, zipPath);
+  } catch (error: any) {
+    throw new Error(`Download failed: ${error.message}`);
+  }
   
   // Verify checksum
   Log.log('Verifying checksum...');
   const isValid = await verifyChecksum(zipPath, manifest.checksum);
   if (!isValid) {
     await fs.remove(zipPath);
-    throw new Error('Framework checksum verification failed');
+    throw new Error(
+      'Framework checksum verification failed. The downloaded file may be corrupted.\n' +
+      'Please try again or report this issue.'
+    );
   }
+  Log.success('Checksum verified');
   
   // Extract zip
   Log.log('Extracting framework...');
@@ -146,7 +194,12 @@ export async function downloadFramework(
   const { promisify } = await import('util');
   const execAsync = promisify(exec);
   
-  await execAsync(`unzip -q -o "${zipPath}" -d "${outputDir}"`);
+  try {
+    await execAsync(`unzip -q -o "${zipPath}" -d "${outputDir}"`);
+  } catch (error: any) {
+    await fs.remove(zipPath);
+    throw new Error(`Extraction failed: ${error.message}`);
+  }
   
   // Remove zip file
   await fs.remove(zipPath);
@@ -156,6 +209,10 @@ export async function downloadFramework(
   if (!await fs.pathExists(frameworkPath)) {
     throw new Error('Framework extraction failed - Obsydian.xcframework not found');
   }
+  
+  // Validate framework structure
+  Log.log('Validating framework...');
+  await validateFramework(frameworkPath);
   
   Log.success(`Framework installed at: ${frameworkPath}`);
   

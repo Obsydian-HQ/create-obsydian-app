@@ -2,7 +2,7 @@
 
 **Create, build, and ship native Obsydian apps to TestFlight and App Store.**
 
-No Xcode GUI required.
+No Xcode GUI required. Framework-only - all apps use the Obsydian framework for cross-platform UI components.
 
 ## Installation
 
@@ -80,6 +80,15 @@ obsydian submit --platform macos
 obsydian submit --platform ios
 ```
 
+### `obsydian framework`
+
+Manage Obsydian framework versions.
+
+```bash
+obsydian framework version    # Show current version
+obsydian framework update      # Update to latest version
+```
+
 ## Configuration
 
 Projects are configured via `obsydian.json`:
@@ -90,6 +99,10 @@ Projects are configured via `obsydian.json`:
   "version": "1.0.0",
   "bundleId": "com.example.myapp",
   "platforms": ["macos"],
+  "framework": {
+    "version": "0.1.0",
+    "source": "github"
+  },
   "apple": {
     "teamId": "XXXXXXXXXX",
     "minimumOsVersion": "14.0"
@@ -118,10 +131,24 @@ Projects are configured via `obsydian.json`:
 - Node.js 18+
 - Apple Developer Account (for TestFlight/App Store)
 
+## Framework Management
+
+The Obsydian CLI is **framework-only** - all apps automatically include the Obsydian framework:
+
+```bash
+# Check framework version
+obsydian framework version
+
+# Update to latest framework
+obsydian framework update
+```
+
+See [FRAMEWORK.md](./FRAMEWORK.md) for framework documentation and [API.md](./API.md) for API reference.
+
 ## How It Works
 
-1. **init** - Generates an Xcode project and Bazel build files
-2. **build** - Uses `xcodebuild` to compile your C++ code
+1. **init** - Downloads Obsydian framework and generates Xcode project
+2. **build** - Uses `xcodebuild` to compile your C++ code with the framework
 3. **submit** - Uses `xcrun altool` to upload to App Store Connect
 
 No need to open Xcode GUI at all!

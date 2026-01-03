@@ -95,31 +95,53 @@ export async function generateXcodeProject(options: XcodeProjectOptions): Promis
   const cocoaFrameworkRefUUID = generateUUID();
   const cocoaFrameworkBuildUUID = generateUUID();
   
-  // Obsydian framework references (if provided)
-  let obsydianFrameworkRefUUID: string | undefined;
-  let obsydianFrameworkBuildUUID: string | undefined;
-  const frameworkBuildFileUUIDs: string[] = [cocoaFrameworkBuildUUID];
+  // Framework is REQUIRED - Obsydian CLI only supports framework-based apps
+  if (!options.frameworkPath) {
+    throw new Error('Framework path is required. Obsydian CLI only supports framework-based apps.');
+  }
   
-  if (options.frameworkPath) {
-    obsydianFrameworkRefUUID = generateUUID();
-    obsydianFrameworkBuildUUID = generateUUID();
+  // Obsydian framework references (required)
+  const obsydianFrameworkRefUUID = generateUUID();
+  const obsydianFrameworkBuildUUID = generateUUID();
+  const frameworkBuildFileUUIDs: string[] = [cocoaFrameworkBuildUUID, obsydianFrameworkBuildUUID];
+  
+  // Calculate relative path from project directory
+  const frameworkRelativePath = path.relative(projectDir, options.frameworkPath);
+  
+  fileRefs[obsydianFrameworkRefUUID] = {
+    isa: 'PBXFileReference',
+    lastKnownFileType: 'wrapper.xcframework',
+    path: frameworkRelativePath,
+    sourceTree: '<group>',
+  };
+  
+  buildFiles[obsydianFrameworkBuildUUID] = {
+    isa: 'PBXBuildFile',
+    fileRef: obsydianFrameworkRefUUID,
+    settings: {
+      ATTRIBUTES: ['CodeSignOnCopy', 'RemoveHeadersOnCopy'],
+    },
+  };
+  
+  // Determine primary platform early (used throughout)
+  const primaryPlatform = options.platforms.includes('ios') ? 'ios' : 'macos';
+  const isIOS = primaryPlatform === 'ios';
+  
+  // For iOS, we need an embed frameworks phase
+  let embedFrameworksPhaseUUID: string | undefined;
+  let embedFrameworksBuildFileUUID: string | undefined;
+  
+  if (isIOS) {
+    embedFrameworksPhaseUUID = generateUUID();
+    embedFrameworksBuildFileUUID = generateUUID();
     
-    // Calculate relative path from project directory
-    const frameworkRelativePath = path.relative(projectDir, options.frameworkPath);
-    
-    fileRefs[obsydianFrameworkRefUUID] = {
-      isa: 'PBXFileReference',
-      lastKnownFileType: 'wrapper.xcframework',
-      path: frameworkRelativePath,
-      sourceTree: '<group>',
-    };
-    
-    buildFiles[obsydianFrameworkBuildUUID] = {
+    buildFiles[embedFrameworksBuildFileUUID] = {
       isa: 'PBXBuildFile',
       fileRef: obsydianFrameworkRefUUID,
+      settings: {
+        ATTRIBUTES: ['CodeSignOnCopy', 'RemoveHeadersOnCopy'],
+      },
     };
-    
-    frameworkBuildFileUUIDs.push(obsydianFrameworkBuildUUID);
   }
 
   for (const filePath of sourceFiles) {
@@ -213,42 +235,88 @@ export async function generateXcodeProject(options: XcodeProjectOptions): Promis
     CLANG_ENABLE_OBJC_ARC: 'YES',
     CLANG_ENABLE_OBJC_WEAK: 'YES',
     CODE_SIGN_STYLE: 'Automatic',
-    COMBINE_HIDPI_IMAGES: 'YES',
     CURRENT_PROJECT_VERSION: '1',
     DEVELOPMENT_TEAM: teamId,
     GENERATE_INFOPLIST_FILE: 'NO',
     INFOPLIST_FILE: infoPlistPath,
-    INFOPLIST_KEY_NSMainNibFile: '',
-    INFOPLIST_KEY_NSPrincipalClass: 'NSApplication',
-    LD_RUNPATH_SEARCH_PATHS: '$(inherited) @executable_path/../Frameworks',
-    MACOSX_DEPLOYMENT_TARGET: minimumOsVersion,
     MARKETING_VERSION: '1.0',
     PRODUCT_BUNDLE_IDENTIFIER: bundleId,
     PRODUCT_NAME: '$(TARGET_NAME)',
-    SDKROOT: 'macosx',
     SWIFT_EMIT_LOC_STRINGS: 'YES',
   };
   
-  // Add framework search paths and linking if Obsydian framework is provided
-  if (options.frameworkPath) {
-    const frameworkDir = path.dirname(options.frameworkPath);
-    const frameworkRelativeDir = path.relative(projectDir, frameworkDir);
-    
-    baseBuildSettings.FRAMEWORK_SEARCH_PATHS = [
-      '$(inherited)',
-      `"${frameworkRelativeDir}"`,
+  // Platform-specific settings
+  if (isIOS) {
+    baseBuildSettings.INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = 'YES';
+    baseBuildSettings.INFOPLIST_KEY_UILaunchStoryboardName = 'LaunchScreen';
+    baseBuildSettings.INFOPLIST_KEY_UISupportedInterfaceOrientations = [
+      'UIInterfaceOrientationPortrait',
+      'UIInterfaceOrientationLandscapeLeft',
+      'UIInterfaceOrientationLandscapeRight',
     ];
-    
-    baseBuildSettings.HEADER_SEARCH_PATHS = [
-      '$(inherited)',
-      `"${path.join(frameworkRelativeDir, 'Obsydian.xcframework', 'macos-arm64', 'Headers')}"`,
+    baseBuildSettings.INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = [
+      'UIInterfaceOrientationPortrait',
+      'UIInterfaceOrientationPortraitUpsideDown',
+      'UIInterfaceOrientationLandscapeLeft',
+      'UIInterfaceOrientationLandscapeRight',
     ];
-    
-    baseBuildSettings.OTHER_LDFLAGS = [
-      '$(inherited)',
-      '-framework',
-      'Obsydian',
-    ];
+    baseBuildSettings.IPHONEOS_DEPLOYMENT_TARGET = minimumOsVersion;
+    baseBuildSettings.LD_RUNPATH_SEARCH_PATHS = '$(inherited) @executable_path/Frameworks';
+    baseBuildSettings.SDKROOT = 'iphoneos';
+    baseBuildSettings.TARGETED_DEVICE_FAMILY = '1,2'; // iPhone and iPad
+  } else {
+    baseBuildSettings.COMBINE_HIDPI_IMAGES = 'YES';
+    baseBuildSettings.INFOPLIST_KEY_NSMainNibFile = '';
+    baseBuildSettings.INFOPLIST_KEY_NSPrincipalClass = 'NSApplication';
+    baseBuildSettings.LD_RUNPATH_SEARCH_PATHS = '$(inherited) @executable_path/../Frameworks';
+    baseBuildSettings.MACOSX_DEPLOYMENT_TARGET = minimumOsVersion;
+    baseBuildSettings.SDKROOT = 'macosx';
+    // Framework only supports arm64, so only build for active architecture
+    baseBuildSettings.ONLY_ACTIVE_ARCH = 'YES';
+  }
+  
+  // Framework is REQUIRED - always add framework search paths and linking
+  if (!options.frameworkPath) {
+    throw new Error('Framework path is required. Obsydian CLI only supports framework-based apps.');
+  }
+  
+  const frameworkDir = path.dirname(options.frameworkPath);
+  const frameworkRelativeDir = path.relative(projectDir, frameworkDir);
+  
+  // Framework search paths - Xcode will resolve the correct platform slice
+  baseBuildSettings.FRAMEWORK_SEARCH_PATHS = [
+    '$(inherited)',
+    `"${frameworkRelativeDir}"`,
+  ];
+  
+  // For XCFrameworks, add header search paths for the specific platform
+  // We need to add paths for both possible architectures
+  const frameworkName = path.basename(options.frameworkPath, '.xcframework');
+  
+  // Add macOS headers path (primary for macOS builds)
+  const macosHeadersPath = path.join(frameworkRelativeDir, frameworkName + '.xcframework', 'macos-arm64', frameworkName + '.framework', 'Headers');
+  
+  baseBuildSettings.HEADER_SEARCH_PATHS = [
+    '$(inherited)',
+    `"${macosHeadersPath}"`,
+  ];
+  
+  // Also set up for iOS if iOS is in platforms
+  if (options.platforms.includes('ios')) {
+    const iosHeadersPath = path.join(frameworkRelativeDir, frameworkName + '.xcframework', 'ios-arm64', frameworkName + '.framework', 'Headers');
+    baseBuildSettings.HEADER_SEARCH_PATHS.push(`"${iosHeadersPath}"`);
+  }
+  
+  baseBuildSettings.OTHER_LDFLAGS = [
+    '$(inherited)',
+    '-framework',
+    'Obsydian',
+  ];
+  
+  // iOS requires framework embedding
+  if (isIOS) {
+    baseBuildSettings.ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = 'NO';
+    // Framework will be embedded via Copy Files phase
   }
 
   // Add entitlements if provided
@@ -281,11 +349,13 @@ export async function generateXcodeProject(options: XcodeProjectOptions): Promis
       ENABLE_NS_ASSERTIONS: 'NO',
       MTL_ENABLE_DEBUG_INFO: 'NO',
       MTL_FAST_MATH: 'YES',
+      // For macOS, framework only supports arm64, so only build active arch even in Release
+      ...(primaryPlatform === 'macos' ? { ONLY_ACTIVE_ARCH: 'YES' } : {}),
     },
   };
 
   // Project-level build settings
-  const projectBuildSettings = {
+  const projectBuildSettings: Record<string, any> = {
     ALWAYS_SEARCH_USER_PATHS: 'NO',
     CLANG_ANALYZER_NONNULL: 'YES',
     CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION: 'YES_AGGRESSIVE',
@@ -325,11 +395,18 @@ export async function generateXcodeProject(options: XcodeProjectOptions): Promis
     GCC_WARN_UNINITIALIZED_AUTOS: 'YES_AGGRESSIVE',
     GCC_WARN_UNUSED_FUNCTION: 'YES',
     GCC_WARN_UNUSED_VARIABLE: 'YES',
-    MACOSX_DEPLOYMENT_TARGET: minimumOsVersion,
     MTL_ENABLE_DEBUG_INFO: 'INCLUDE_SOURCE',
     MTL_FAST_MATH: 'YES',
-    SDKROOT: 'macosx',
   };
+  
+  // Platform-specific project settings
+  if (options.platforms.includes('ios')) {
+    projectBuildSettings.IPHONEOS_DEPLOYMENT_TARGET = minimumOsVersion;
+    projectBuildSettings.SDKROOT = 'iphoneos';
+  } else {
+    projectBuildSettings.MACOSX_DEPLOYMENT_TARGET = minimumOsVersion;
+    projectBuildSettings.SDKROOT = 'macosx';
+  }
 
   const projectDebugConfig = {
     isa: 'XCBuildConfiguration',
@@ -377,6 +454,20 @@ export async function generateXcodeProject(options: XcodeProjectOptions): Promis
     files: [assetsCatalogBuildUUID],
     runOnlyForDeploymentPostprocessing: 0,
   };
+  
+  // Embed Frameworks phase for iOS (required for XCFrameworks)
+  let embedFrameworksPhase: any = undefined;
+  if (isIOS && embedFrameworksPhaseUUID && embedFrameworksBuildFileUUID) {
+    embedFrameworksPhase = {
+      isa: 'PBXCopyFilesBuildPhase',
+      buildActionMask: 2147483647,
+      dstPath: '',
+      dstSubfolderSpec: 10, // Frameworks folder
+      files: [embedFrameworksBuildFileUUID],
+      name: 'Embed Frameworks',
+      runOnlyForDeploymentPostprocessing: 0,
+    };
+  }
 
   // Configuration lists
   const targetConfigList = {
@@ -393,11 +484,16 @@ export async function generateXcodeProject(options: XcodeProjectOptions): Promis
     defaultConfigurationName: 'Release',
   };
 
-  // Native target
+  // Native target - include embed phase for iOS
+  const buildPhases = [sourcesPhaseUUID, frameworksPhaseUUID, resourcesPhaseUUID];
+  if (isIOS && embedFrameworksPhaseUUID) {
+    buildPhases.push(embedFrameworksPhaseUUID);
+  }
+  
   const nativeTarget = {
     isa: 'PBXNativeTarget',
     buildConfigurationList: targetConfigListUUID,
-    buildPhases: [sourcesPhaseUUID, frameworksPhaseUUID, resourcesPhaseUUID],
+    buildPhases,
     buildRules: [],
     dependencies: [],
     name: projectName,
@@ -420,10 +516,8 @@ export async function generateXcodeProject(options: XcodeProjectOptions): Promis
     sourceTree: '<group>',
   };
 
-  const frameworksGroupChildren = [cocoaFrameworkRefUUID];
-  if (obsydianFrameworkRefUUID) {
-    frameworksGroupChildren.push(obsydianFrameworkRefUUID);
-  }
+  // Framework is always required, so always include it
+  const frameworksGroupChildren = [cocoaFrameworkRefUUID, obsydianFrameworkRefUUID];
   
   const frameworksGroup = {
     isa: 'PBXGroup',
@@ -475,6 +569,14 @@ export async function generateXcodeProject(options: XcodeProjectOptions): Promis
     ...fileRefs,
     ...buildFiles,
   };
+  
+  // Add embed frameworks phase for iOS
+  if (isIOS && embedFrameworksPhaseUUID && embedFrameworksPhase) {
+    objects[embedFrameworksPhaseUUID] = embedFrameworksPhase;
+    if (embedFrameworksBuildFileUUID) {
+      // Already added to buildFiles above
+    }
+  }
 
   const projectJson = {
     archiveVersion: 1,

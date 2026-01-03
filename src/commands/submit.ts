@@ -218,7 +218,10 @@ async function buildArchive(
     ];
 
     if (platform === 'macos') {
-      args.push('-destination', 'generic/platform=macOS');
+      args.push('-destination', 'platform=macOS,arch=arm64');
+      // Framework only supports arm64, force single architecture
+      args.push('ONLY_ACTIVE_ARCH=YES');
+      args.push('ARCHS=arm64');
     } else {
       args.push('-destination', 'generic/platform=iOS');
     }
