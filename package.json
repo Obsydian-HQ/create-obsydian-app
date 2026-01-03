@@ -1,0 +1,52 @@
+{
+  "name": "create-obsydian-app",
+  "version": "0.2.0",
+  "description": "CLI tool to scaffold new Obsydian applications. Create cross-platform native apps with one command.",
+  "type": "module",
+  "bin": {
+    "create-obsydian-app": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm run build"
+  },
+  "keywords": [
+    "obsydian",
+    "obsidian",
+    "cross-platform",
+    "native",
+    "scaffold",
+    "cli",
+    "macos",
+    "ios",
+    "android",
+    "windows",
+    "linux",
+    "cpp"
+  ],
+  "author": "Obsydian-HQ",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Obsydian-HQ/create-obsydian-app.git"
+  },
+  "homepage": "https://github.com/Obsydian-HQ/create-obsydian-app#readme",
+  "bugs": {
+    "url": "https://github.com/Obsydian-HQ/create-obsydian-app/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@bacons/xcode": "^1.0.0-alpha.28",
+    "commander": "^11.0.0",
+    "fs-extra": "^11.1.1"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  }
+}
