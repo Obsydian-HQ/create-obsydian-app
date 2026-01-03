@@ -1,57 +1,31 @@
 #!/usr/bin/env node
 
 /**
- * create-obsidian-app
+ * Obsydian CLI
  * 
- * Scaffolds a new Obsidian application with Bazel workspace setup
- * Currently supports macOS only (other platforms coming soon)
+ * Create, build, and ship native apps to TestFlight and App Store.
+ * No Xcode GUI required.
  */
 
-import { program } from 'commander';
-import { scaffoldApp } from './scaffold.js';
-import { IMPLEMENTED_PLATFORMS } from './validation.js';
+import { Command } from 'commander';
+import { initCommand } from './commands/init.js';
+import { buildCommand } from './commands/build.js';
+import { submitCommand } from './commands/submit.js';
+import { runCommand } from './commands/run.js';
+import { credentialsCommand } from './commands/credentials.js';
+
+const program = new Command();
 
 program
-  .name('create-obsidian-app')
-  .description('Create a new Obsidian application (macOS only - other platforms coming soon)')
-  .argument('<app-name>', 'Name of the application')
-  .option(
-    '-p, --platforms <platforms...>',
-    `Target platforms (currently only ${IMPLEMENTED_PLATFORMS.join(', ')} is supported)`,
-    ['macos']
-  )
-  .action(async (appName: string, options: { platforms: string[] }) => {
-    try {
-      const result = await scaffoldApp({
-        appName,
-        platforms: options.platforms,
-      });
+  .name('obsydian')
+  .description('Create, build, and ship native Obsydian apps')
+  .version('0.1.0');
 
-      console.log(`\nNext steps:`);
-      console.log(`  cd ${appName}`);
-      
-      // Check if Xcode project was generated
-      const hasApplePlatform = options.platforms.some(p => p === 'macos' || p === 'ios');
-      
-      if (hasApplePlatform) {
-        console.log(`\n📱 To build and archive in Xcode:`);
-        console.log(`  1. Open ${appName}.xcodeproj in Xcode`);
-        console.log(`  2. Select your development team in Signing & Capabilities`);
-        console.log(`  3. Product → Archive`);
-        console.log(`  4. Distribute to TestFlight`);
-      }
-      
-      console.log(`\n🔨 To build with Bazel:`);
-      if (!result.obsidianPath) {
-        console.log(`  # Configure Obsidian dependency in MODULE.bazel (see README.md for instructions)`);
-      }
-      const buildConfigs = options.platforms.map(p => `--config=${p}`).join(' ');
-      console.log(`  bazel build //... ${buildConfigs}`);
-      console.log(`  bazel run //:${result.executableName}_app ${buildConfigs}`);
-    } catch (error) {
-      console.error('❌ Error creating app:', error instanceof Error ? error.message : String(error));
-      process.exit(1);
-    }
-  });
+// Register commands
+program.addCommand(initCommand);
+program.addCommand(buildCommand);
+program.addCommand(runCommand);
+program.addCommand(submitCommand);
+program.addCommand(credentialsCommand);
 
 program.parse();

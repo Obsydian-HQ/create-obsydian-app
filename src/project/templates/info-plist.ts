@@ -1,12 +1,11 @@
 /**
- * Info.plist template generator for macOS/iOS
+ * Generate Info.plist template
  */
 
 export function generateInfoPlist(
-  appName: string,
-  executableName: string,
+  projectName: string,
   bundleId: string,
-  minimumOsVersion: string
+  version: string
 ): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -15,31 +14,30 @@ export function generateInfoPlist(
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleExecutable</key>
-    <string>${executableName}</string>
+    <string>${projectName}</string>
     <key>CFBundleIdentifier</key>
     <string>${bundleId}</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>${appName}</string>
+    <string>${projectName}</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>${version}</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
-    <string>${minimumOsVersion}</string>
+    <string>14.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2025. All rights reserved.</string>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.utilities</string>
-    <key>CFBundleIconFile</key>
-    <string>Obsidian</string>
 </dict>
 </plist>
 `;
 }
-

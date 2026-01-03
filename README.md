@@ -1,130 +1,137 @@
-# create-obsydian-app
+# @obsydian/cli
 
-**CLI tool to scaffold new Obsydian applications.**
+**Create, build, and ship native Obsydian apps to TestFlight and App Store.**
 
-Create cross-platform native apps with one command.
+No Xcode GUI required.
 
 ## Installation
 
 ```bash
-# Using npx (recommended)
-npx create-obsydian-app@latest my-app
-
-# Or install globally
-npm install -g create-obsydian-app
-create-obsydian-app my-app
+npm install -g @obsydian/cli
+# or
+npx @obsydian/cli <command>
 ```
 
-## Usage
+## Quick Start
 
 ```bash
-# Create a macOS app
-npx create-obsydian-app my-app --platforms macos
-
-# Create an iOS app (coming soon)
-npx create-obsydian-app my-app --platforms ios
-
-# Create a multi-platform app
-npx create-obsydian-app my-app --platforms macos ios
-```
-
-## What Gets Generated
-
-```
-my-app/
-├── main.cpp                    # Your app entry point
-├── Info.plist                  # App metadata
-├── entitlements.plist         # macOS entitlements
-├── MODULE.bazel               # Bazel module configuration
-├── BUILD                      # Bazel build targets
-├── .bazelrc                   # Bazel configuration
-├── .bazelversion              # Bazel version pin
-├── my-app.xcodeproj/          # Xcode project for macOS/iOS
-└── README.md                  # Generated documentation
-```
-
-## Building Your App
-
-### With Xcode (Recommended for distribution)
-
-1. Open `my-app.xcodeproj` in Xcode
-2. Select your development team in Signing & Capabilities
-3. Product → Archive
-4. Distribute to TestFlight
-
-### With Bazel
-
-```bash
-cd my-app
+# Create a new app
+obsydian init my-app
 
 # Build
-bazel build //... --config=macos
+cd my-app
+obsydian build --platform macos
 
-# Run
-bazel run //:my_app_app --config=macos
+# Run locally
+obsydian run --platform macos
+
+# Submit to TestFlight
+obsydian credentials setup  # First time only
+obsydian submit --platform macos
 ```
 
-## Features
+## Commands
 
-- ✅ **Xcode Project Generation** - Ready for App Store submission
-- ✅ **Bazel Build System** - Fast, reproducible builds
-- ✅ **App Icon Support** - Generates icon placeholders
-- ✅ **Code Signing** - Automatic code signing configuration
-- ✅ **Entitlements** - App Sandbox ready
+### `obsydian init [name]`
 
-## Roadmap
+Create a new Obsydian project.
 
-### CLI Features (Inspired by Expo EAS CLI)
-
-- [ ] `obsydian build` - Cloud builds
-- [ ] `obsydian submit` - App Store submission
-- [ ] `obsydian credentials` - Code signing management
-- [ ] `obsydian device` - Device management
-- [ ] `obsydian update` - OTA updates
-
-### Platform Support
-
-- ✅ macOS
-- 🚧 iOS
-- 📋 Android
-- 📋 Windows
-- 📋 Linux
-
-## Architecture
-
-This CLI is inspired by [Expo's EAS CLI](https://github.com/expo/eas-cli) but designed for C++ native development.
-
-```
-create-obsydian-app/
-├── src/
-│   ├── index.ts           # CLI entry point
-│   ├── scaffold.ts        # Project scaffolding
-│   ├── validation.ts      # Input validation
-│   ├── platforms/         # Platform-specific generators
-│   │   ├── base.ts
-│   │   ├── macos.ts
-│   │   └── ios.ts
-│   ├── templates/         # File templates
-│   │   ├── mainCpp.ts
-│   │   ├── infoPlist.ts
-│   │   └── ...
-│   └── utils/
-│       ├── xcodeProject.ts    # Xcode project generation
-│       ├── bundleId.ts        # Bundle ID utilities
-│       └── obsidianDetector.ts
+```bash
+obsydian init my-app
+obsydian init my-app --platform macos
 ```
 
-## Dependencies
+### `obsydian build`
 
+Build your app using xcodebuild.
+
+```bash
+obsydian build --platform macos
+obsydian build --platform macos --configuration Debug
+obsydian build --platform macos --archive  # Create distributable archive
+```
+
+### `obsydian run`
+
+Run your app locally.
+
+```bash
+obsydian run --platform macos
+obsydian run --platform ios  # Runs in iOS Simulator
+```
+
+### `obsydian credentials setup`
+
+Configure App Store Connect API credentials.
+
+```bash
+obsydian credentials setup
+obsydian credentials show
+```
+
+You'll need an API key from [App Store Connect](https://appstoreconnect.apple.com/access/api).
+
+### `obsydian submit`
+
+Submit your app to TestFlight and App Store.
+
+```bash
+obsydian submit --platform macos
+obsydian submit --platform ios
+```
+
+## Configuration
+
+Projects are configured via `obsydian.json`:
+
+```json
+{
+  "name": "my-app",
+  "version": "1.0.0",
+  "bundleId": "com.example.myapp",
+  "platforms": ["macos"],
+  "apple": {
+    "teamId": "XXXXXXXXXX",
+    "minimumOsVersion": "14.0"
+  },
+  "build": {
+    "production": {
+      "platform": "macos",
+      "configuration": "Release"
+    }
+  },
+  "submit": {
+    "production": {
+      "platform": "macos",
+      "ascApiKeyPath": ".keys/AuthKey_XXXXXXXXXX.p8",
+      "ascApiKeyId": "XXXXXXXXXX",
+      "ascApiKeyIssuerId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    }
+  }
+}
+```
+
+## Requirements
+
+- macOS 14.0+
+- Xcode 15.0+
+- Node.js 18+
+- Apple Developer Account (for TestFlight/App Store)
+
+## How It Works
+
+1. **init** - Generates an Xcode project and Bazel build files
+2. **build** - Uses `xcodebuild` to compile your C++ code
+3. **submit** - Uses `xcrun altool` to upload to App Store Connect
+
+No need to open Xcode GUI at all!
+
+## Inspired By
+
+- [Expo EAS CLI](https://github.com/expo/eas-cli) - Build and submit workflow
 - [@bacons/xcode](https://github.com/EvanBacon/xcode) - Xcode project manipulation
-- [commander](https://github.com/tj/commander.js) - CLI framework
-- [fs-extra](https://github.com/jprichardson/node-fs-extra) - File system utilities
-
-## Related Projects
-
-- [obsydian](https://github.com/Obsydian-HQ/obsydian) - Main Obsydian framework
-- [obsydian-devtools](https://github.com/Obsydian-HQ/obsydian-devtools) - Developer tools
+- [Fastlane](https://fastlane.tools/) - iOS deployment automation
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT
