@@ -9,14 +9,16 @@ import path from 'path';
 import ora from 'ora';
 import chalk from 'chalk';
 import Log from '../utils/log.js';
-import { promptText, promptSelect, promptMultiSelect } from '../utils/prompts.js';
+import { promptText, promptSelect, promptMultiSelect, promptConfirm } from '../utils/prompts.js';
 import { createDefaultConfig, writeConfig, type Platform } from '../project/config.js';
 import { generateMainCpp } from '../project/templates/main-cpp.js';
+import { generateMainWithFramework } from '../project/templates/main-with-framework.js';
 import { generateInfoPlist } from '../project/templates/info-plist.js';
 import { generateEntitlements } from '../project/templates/entitlements.js';
 import { generatePlaceholderIcon } from '../project/icon-generator.js';
 import { generateXcodeProject } from '../project/xcode.js';
 import { getXcodeVersion } from '../utils/exec.js';
+import { downloadFrameworkWithCache, getLatestFrameworkVersion } from '../utils/framework-downloader.js';
 
 export const initCommand = new Command('init')
   .description('Create a new Obsydian project')
@@ -83,12 +85,47 @@ export const initCommand = new Command('init')
     try {
       await fs.ensureDir(projectDir);
 
-      // Create obsydian.json config
-      const config = createDefaultConfig(projectName, bundleId, platforms, options?.teamId);
-      await writeConfig(projectDir, config);
+      // Ask if user wants to use Obsydian framework
+      let frameworkPath: string | undefined;
+      let frameworkVersion: string | undefined;
+      
+      const useFramework = await promptConfirm(
+        'Use Obsydian framework? (provides UI components like Window, Button, etc.)',
+        true
+      );
+      
+      if (useFramework) {
+        try {
+          frameworkVersion = await getLatestFrameworkVersion();
+          Log.log(`Latest framework version: ${frameworkVersion}`);
+          
+          frameworkPath = await downloadFrameworkWithCache(frameworkVersion, projectDir);
+          
+          // Update config with framework info
+          const config = createDefaultConfig(projectName, bundleId, platforms, options?.teamId);
+          config.framework = {
+            version: frameworkVersion,
+            source: 'github',
+          };
+          await writeConfig(projectDir, config);
+        } catch (error: any) {
+          Log.warn(`Could not download framework: ${error.message}`);
+          Log.log('Creating project without framework. You can add it later.');
+          
+          const config = createDefaultConfig(projectName, bundleId, platforms, options?.teamId);
+          await writeConfig(projectDir, config);
+        }
+      } else {
+        // Create obsydian.json config without framework
+        const config = createDefaultConfig(projectName, bundleId, platforms, options?.teamId);
+        await writeConfig(projectDir, config);
+      }
 
       // Create main.m (Objective-C source)
-      const mainSource = generateMainCpp(projectName);
+      // Use framework-aware template if framework is installed
+      const mainSource = frameworkPath 
+        ? generateMainWithFramework(projectName)
+        : generateMainCpp(projectName);
       await fs.writeFile(path.join(projectDir, 'main.m'), mainSource);
 
       // Create Info.plist for Apple platforms
@@ -124,6 +161,7 @@ export const initCommand = new Command('init')
           infoPlistPath: 'Info.plist',
           entitlementsPath: platforms.includes('macos') ? 'entitlements.plist' : undefined,
           teamId: options?.teamId,
+          frameworkPath,
         });
       }
 

@@ -22,6 +22,7 @@ export interface XcodeProjectOptions {
   entitlementsPath?: string;
   minimumOsVersion?: string;
   teamId?: string;
+  frameworkPath?: string; // Path to Obsydian.xcframework
 }
 
 /**
@@ -84,15 +85,42 @@ export async function generateXcodeProject(options: XcodeProjectOptions): Promis
   const productRefUUID = generateUUID();
   const assetsCatalogBuildUUID = generateUUID();
 
-  // Framework references
-  const cocoaFrameworkRefUUID = generateUUID();
-  const cocoaFrameworkBuildUUID = generateUUID();
-
   // Create file references for source files
   const fileRefs: Record<string, any> = {};
   const buildFiles: Record<string, any> = {};
   const sourceBuildFileUUIDs: string[] = [];
   const mainGroupChildren: string[] = [];
+  
+  // Framework references
+  const cocoaFrameworkRefUUID = generateUUID();
+  const cocoaFrameworkBuildUUID = generateUUID();
+  
+  // Obsydian framework references (if provided)
+  let obsydianFrameworkRefUUID: string | undefined;
+  let obsydianFrameworkBuildUUID: string | undefined;
+  const frameworkBuildFileUUIDs: string[] = [cocoaFrameworkBuildUUID];
+  
+  if (options.frameworkPath) {
+    obsydianFrameworkRefUUID = generateUUID();
+    obsydianFrameworkBuildUUID = generateUUID();
+    
+    // Calculate relative path from project directory
+    const frameworkRelativePath = path.relative(projectDir, options.frameworkPath);
+    
+    fileRefs[obsydianFrameworkRefUUID] = {
+      isa: 'PBXFileReference',
+      lastKnownFileType: 'wrapper.xcframework',
+      path: frameworkRelativePath,
+      sourceTree: '<group>',
+    };
+    
+    buildFiles[obsydianFrameworkBuildUUID] = {
+      isa: 'PBXBuildFile',
+      fileRef: obsydianFrameworkRefUUID,
+    };
+    
+    frameworkBuildFileUUIDs.push(obsydianFrameworkBuildUUID);
+  }
 
   for (const filePath of sourceFiles) {
     const fileRefUUID = generateUUID();
@@ -200,6 +228,28 @@ export async function generateXcodeProject(options: XcodeProjectOptions): Promis
     SDKROOT: 'macosx',
     SWIFT_EMIT_LOC_STRINGS: 'YES',
   };
+  
+  // Add framework search paths and linking if Obsydian framework is provided
+  if (options.frameworkPath) {
+    const frameworkDir = path.dirname(options.frameworkPath);
+    const frameworkRelativeDir = path.relative(projectDir, frameworkDir);
+    
+    baseBuildSettings.FRAMEWORK_SEARCH_PATHS = [
+      '$(inherited)',
+      `"${frameworkRelativeDir}"`,
+    ];
+    
+    baseBuildSettings.HEADER_SEARCH_PATHS = [
+      '$(inherited)',
+      `"${path.join(frameworkRelativeDir, 'Obsydian.xcframework', 'macos-arm64', 'Headers')}"`,
+    ];
+    
+    baseBuildSettings.OTHER_LDFLAGS = [
+      '$(inherited)',
+      '-framework',
+      'Obsydian',
+    ];
+  }
 
   // Add entitlements if provided
   if (options.entitlementsPath) {
@@ -317,7 +367,7 @@ export async function generateXcodeProject(options: XcodeProjectOptions): Promis
   const frameworksPhase = {
     isa: 'PBXFrameworksBuildPhase',
     buildActionMask: 2147483647,
-    files: [cocoaFrameworkBuildUUID],
+    files: frameworkBuildFileUUIDs,
     runOnlyForDeploymentPostprocessing: 0,
   };
 
@@ -370,9 +420,14 @@ export async function generateXcodeProject(options: XcodeProjectOptions): Promis
     sourceTree: '<group>',
   };
 
+  const frameworksGroupChildren = [cocoaFrameworkRefUUID];
+  if (obsydianFrameworkRefUUID) {
+    frameworksGroupChildren.push(obsydianFrameworkRefUUID);
+  }
+  
   const frameworksGroup = {
     isa: 'PBXGroup',
-    children: [cocoaFrameworkRefUUID],
+    children: frameworksGroupChildren,
     name: 'Frameworks',
     sourceTree: '<group>',
   };

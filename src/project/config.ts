@@ -11,6 +11,13 @@ export interface ObsydianConfig {
   bundleId: string;
   platforms: Platform[];
   
+  // Framework configuration
+  framework?: {
+    version?: string;
+    source?: 'github' | 'local';
+    localPath?: string;
+  };
+  
   // iOS/macOS specific
   apple?: {
     teamId?: string;
