@@ -27,6 +27,7 @@ export interface FrameworkManifest {
 
 /**
  * Get the latest framework version from GitHub Releases
+ * Uses /releases/latest which returns the latest non-prerelease, non-draft release
  */
 export async function getLatestFrameworkVersion(): Promise<string> {
   try {
@@ -54,16 +55,46 @@ export async function getLatestFrameworkVersion(): Promise<string> {
       throw new Error(`Failed to fetch latest release: ${response.status} ${response.statusText}`);
     }
     
-    const data = await response.json() as { tag_name: string; name?: string };
-    const version = data.tag_name.replace(/^v/, ''); // Remove 'v' prefix
+    const data = await response.json() as { 
+      tag_name: string; 
+      name?: string;
+      prerelease: boolean;
+      draft: boolean;
+    };
     
-    if (!version || !version.match(/^\d+\.\d+\.\d+/)) {
-      throw new Error(`Invalid version format: ${data.tag_name}`);
+    // Safety check: /latest should not return pre-releases, but verify anyway
+    if (data.prerelease) {
+      throw new Error(
+        'Latest release is a pre-release. Please create a stable release.\n' +
+        `Repository: ${FRAMEWORKS_REPO}`
+      );
+    }
+    
+    if (data.draft) {
+      throw new Error(
+        'Latest release is a draft. Please publish a stable release.\n' +
+        `Repository: ${FRAMEWORKS_REPO}`
+      );
+    }
+    
+    // Extract version from tag (remove 'v' prefix if present)
+    const version = data.tag_name.replace(/^v/, '').trim();
+    
+    // Validate semantic version format (major.minor.patch)
+    if (!version.match(/^\d+\.\d+\.\d+$/)) {
+      throw new Error(
+        `Invalid version format in tag: ${data.tag_name}\n` +
+        `Expected semantic version format (e.g., 1.2.3 or v1.2.3), got: ${data.tag_name}`
+      );
     }
     
     return version;
   } catch (error: any) {
-    if (error.message.includes('No framework releases')) {
+    // Preserve specific error messages
+    if (error.message.includes('No framework releases') || 
+        error.message.includes('pre-release') ||
+        error.message.includes('draft') ||
+        error.message.includes('Invalid version format')) {
       throw error;
     }
     throw new Error(`Failed to fetch latest framework version: ${error.message}`);
