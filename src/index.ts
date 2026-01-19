@@ -14,6 +14,8 @@ import { submitCommand } from './commands/submit.js';
 import { runCommand } from './commands/run.js';
 import { credentialsCommand } from './commands/credentials.js';
 import { frameworkCommand } from './commands/framework.js';
+import { iosCommand } from './commands/ios.js';
+import { xcodeCommand } from './commands/xcode.js';
 
 const program = new Command();
 
@@ -29,5 +31,7 @@ program.addCommand(runCommand);
 program.addCommand(submitCommand);
 program.addCommand(credentialsCommand);
 program.addCommand(frameworkCommand);
+program.addCommand(iosCommand);
+program.addCommand(xcodeCommand);
 
 program.parse();
