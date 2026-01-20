@@ -15,6 +15,9 @@ npx @obsydian/cli <command>
 ## Quick Start
 
 ```bash
+# Interactive menu (guided mode)
+obsydian
+
 # Create a new app
 obsydian init my-app
 
@@ -28,6 +31,45 @@ obsydian run --platform macos
 # Submit to TestFlight
 obsydian credentials setup  # First time only
 obsydian submit --platform macos
+```
+
+## Interactive Menu (Guided Mode)
+
+If you're not sure which command to run, start with:
+
+```bash
+obsydian
+# or
+obsydian menu
+```
+
+This opens an interactive, arrow-key driven menu that can launch the underlying subcommands and then return you back to the menu.
+
+Navigation:
+
+- **Up/Down**: move selection
+- **Enter**: select
+- **Esc**: go back
+- **Ctrl+C**: exit
+
+## Running on a physical iPhone/iPad
+
+`obsydian run --platform ios` targets the **iOS Simulator**.
+
+To build + install + launch on a **connected physical device**, use the Xcode runner:
+
+```bash
+# (Optional) see available devices
+obsydian xcode devices
+
+# Build + run on a physical iOS device (will prompt you to pick one)
+obsydian xcode run --platform ios --device
+```
+
+If you’re doing this for the first time (signing/provisioning), try:
+
+```bash
+obsydian xcode run --platform ios --device --allow-provisioning-updates --allow-provisioning-device-registration
 ```
 
 ## Commands

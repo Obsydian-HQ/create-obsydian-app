@@ -74,7 +74,7 @@ xcodeCommand
   .option('--project <path>', 'Path to .xcodeproj (defaults to auto-detect in current dir)')
   .option('--workspace <path>', 'Path to .xcworkspace (defaults to auto-detect in current dir)')
   .option('--scheme <scheme>', 'Scheme to build/run (will prompt if omitted)')
-  .option('-c, --configuration <config>', 'Build configuration (Debug, Release)', 'Debug')
+  .option('-c, --configuration <config>', 'Build configuration (Debug, Release). If omitted, uses the scheme configuration.')
   .option(
     '--derived-data <path>',
     'Derived data output path (default: Xcode/Expo DerivedData in ~/Library/Developer/Xcode/DerivedData)'
@@ -96,6 +96,17 @@ xcodeCommand
       process.exit(1);
     }
 
+    const configurationRaw: string | undefined = options.configuration;
+    const configuration =
+      configurationRaw === undefined
+        ? undefined
+        : configurationRaw === 'Debug' || configurationRaw === 'Release'
+          ? (configurationRaw as 'Debug' | 'Release')
+          : (() => {
+              Log.error('Configuration must be one of: Debug, Release');
+              process.exit(1);
+            })();
+
     // Commander sets optional-value options to `true` when passed without a value.
     // Normalize to strings/undefined so downstream code can safely call `.trim()`.
     const simulator =
@@ -112,7 +123,7 @@ xcodeCommand
     await runXcodeAsync(cwd, {
       platform,
       scheme: options.scheme,
-      configuration: options.configuration as 'Debug' | 'Release',
+      configuration,
       derivedDataPath,
       verbose: !!options.verbose,
       project: options.project,

@@ -32,7 +32,8 @@ export type XcodePlatform = 'ios' | 'macos';
 export type RunXcodeOptions = {
   platform: XcodePlatform;
   scheme?: string;
-  configuration: 'Debug' | 'Release';
+  // If omitted, use the scheme's encoded configuration.
+  configuration?: 'Debug' | 'Release';
   derivedDataPath?: string;
   verbose: boolean;
 

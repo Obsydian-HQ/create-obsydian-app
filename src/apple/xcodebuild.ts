@@ -14,7 +14,9 @@ export type XcodeContainer =
 
 export type XcodeBuildProfile = {
   scheme: string;
-  configuration: 'Debug' | 'Release';
+  // If omitted, xcodebuild uses the configuration encoded in the scheme/actions.
+  // This matches how most Xcode users expect schemes like "*Release*" to behave.
+  configuration?: 'Debug' | 'Release';
   derivedDataPath?: string;
   destination?: string;
   verbose?: boolean;
@@ -54,9 +56,10 @@ export async function buildAsync(locator: XcodeProjectLocator, profile: XcodeBui
     `${locator.projectName}.xcodeproj`,
     '-scheme',
     profile.scheme,
-    '-configuration',
-    profile.configuration,
   ];
+  if (profile.configuration) {
+    args.push('-configuration', profile.configuration);
+  }
 
   if (profile.derivedDataPath) {
     args.push('-derivedDataPath', profile.derivedDataPath);
@@ -80,9 +83,10 @@ export async function buildContainerAsync(
     ...containerArgs(container),
     '-scheme',
     profile.scheme,
-    '-configuration',
-    profile.configuration,
   ];
+  if (profile.configuration) {
+    args.push('-configuration', profile.configuration);
+  }
 
   if (profile.derivedDataPath) {
     args.push('-derivedDataPath', profile.derivedDataPath);
@@ -111,9 +115,10 @@ export async function showBuildSettingsAsync(
     `${locator.projectName}.xcodeproj`,
     '-scheme',
     profile.scheme,
-    '-configuration',
-    profile.configuration,
   ];
+  if (profile.configuration) {
+    args.push('-configuration', profile.configuration);
+  }
 
   if (profile.derivedDataPath) {
     args.push('-derivedDataPath', profile.derivedDataPath);
@@ -143,9 +148,10 @@ export async function showBuildSettingsContainerAsync(
     ...containerArgs(container),
     '-scheme',
     profile.scheme,
-    '-configuration',
-    profile.configuration,
   ];
+  if (profile.configuration) {
+    args.push('-configuration', profile.configuration);
+  }
 
   if (profile.derivedDataPath) {
     args.push('-derivedDataPath', profile.derivedDataPath);

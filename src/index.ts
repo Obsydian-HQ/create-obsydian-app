@@ -16,6 +16,8 @@ import { credentialsCommand } from './commands/credentials.js';
 import { frameworkCommand } from './commands/framework.js';
 import { iosCommand } from './commands/ios.js';
 import { xcodeCommand } from './commands/xcode.js';
+import { menuCommand } from './commands/menu.js';
+import { runInteractiveMenuAsync } from './interactive/menu.js';
 
 const program = new Command();
 
@@ -33,5 +35,19 @@ program.addCommand(credentialsCommand);
 program.addCommand(frameworkCommand);
 program.addCommand(iosCommand);
 program.addCommand(xcodeCommand);
+program.addCommand(menuCommand);
 
-program.parse();
+program.showHelpAfterError(true);
+
+// If no args are provided, launch interactive menu (TTY-only).
+const argv = process.argv.slice(2);
+if (argv.length === 0) {
+  if (process.stdin.isTTY && process.stdout.isTTY) {
+    await runInteractiveMenuAsync();
+  } else {
+    // Non-interactive environments should get a stable, script-friendly output.
+    program.outputHelp();
+  }
+} else {
+  await program.parseAsync(process.argv);
+}
