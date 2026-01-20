@@ -81,7 +81,10 @@ export async function execOrThrow(
   const result = await exec(command, args, options);
   
   if (result.exitCode !== 0) {
-    const errorMessage = result.stderr || result.stdout || `Command failed with exit code ${result.exitCode}`;
+    // Many tools (including xcodebuild/swiftc) print important diagnostics to stdout.
+    // Prefer showing both streams to avoid hiding the real error.
+    const combined = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
+    const errorMessage = combined || `Command failed with exit code ${result.exitCode}`;
     throw new Error(errorMessage);
   }
   

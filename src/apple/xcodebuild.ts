@@ -43,7 +43,8 @@ export async function xcodebuildAsync(
 ) {
   const result = await exec('xcodebuild', args, { ...options, cwd: projectDir });
   if (result.exitCode !== 0) {
-    const out = (result.stderr || result.stdout || '').trim();
+    // xcodebuild frequently prints errors to stdout (not stderr).
+    const out = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
     throw new Error(out || `xcodebuild failed with exit code ${result.exitCode}`);
   }
   return result;

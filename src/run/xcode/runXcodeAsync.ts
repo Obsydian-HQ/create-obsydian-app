@@ -1,5 +1,7 @@
 import ora from 'ora';
 import fs from 'fs-extra';
+import os from 'os';
+import path from 'path';
 
 import Log from '../../utils/log.js';
 import { exec } from '../../utils/exec.js';
@@ -135,8 +137,32 @@ export async function runXcodeAsync(cwd: string, options: RunXcodeOptions): Prom
     buildSpinner.succeed('Build succeeded!');
   } catch (e: any) {
     buildSpinner.fail('Build failed');
+    const message = (e?.message ?? String(e)).toString();
+
     if (!options.verbose) {
-      Log.error(e?.message ?? String(e));
+      // Save full output to a log file (battle-tested pattern: show a short summary + pointer to full logs).
+      const logDir = path.join(os.tmpdir(), 'obsydian');
+      const logPath = path.join(logDir, `xcodebuild-${Date.now()}.log`);
+      try {
+        await fs.ensureDir(logDir);
+        await fs.writeFile(logPath, message + '\n', 'utf8');
+      } catch {
+        // ignore
+      }
+
+      // Try to surface the *actual* compiler error lines (xcodebuild output can be extremely verbose).
+      const lines = message.split('\n');
+      const interesting = lines.filter((l: string) =>
+        /(^\s*error:)|(\berror:)|(\bfatal error:)|(\bundefined symbol)|(\bld: )/i.test(l)
+      );
+      const preview = (interesting.length ? interesting : lines.slice(-120)).slice(0, 40).join('\n');
+
+      Log.error(preview || message);
+      Log.newLine();
+      if (preview && preview !== message) {
+        Log.dim(`Full xcodebuild output saved to: ${logPath}`);
+        Log.dim('Tip: re-run with --verbose to stream xcodebuild output live.');
+      }
     }
     process.exit(1);
   }

@@ -160,6 +160,24 @@ function clearScreen(): void {
   process.stdout.write('\x1b[2J\x1b[H');
 }
 
+let usingAltScreen = false;
+function enterAltScreen(): void {
+  if (!process.stdout.isTTY) return;
+  if (usingAltScreen) return;
+  // Alternate screen buffer on, then clear.
+  process.stdout.write('\x1b[?1049h');
+  usingAltScreen = true;
+  clearScreen();
+}
+
+function exitAltScreen(): void {
+  if (!process.stdout.isTTY) return;
+  if (!usingAltScreen) return;
+  // Alternate screen buffer off (restores previous screen).
+  process.stdout.write('\x1b[?1049l');
+  usingAltScreen = false;
+}
+
 async function promptMainAsync(inProject: boolean): Promise<MenuAction> {
   const choices: Array<SelectChoice<MenuAction>> = [
     { title: 'Project', description: 'Create a new app', value: { type: 'page', page: 'project' } },
@@ -280,6 +298,10 @@ export async function runInteractiveMenuAsync(): Promise<void> {
   }
 
   installSigintExitHandlerOnce();
+  enterAltScreen();
+  process.once('exit', () => {
+    exitAltScreen();
+  });
 
   let page: Page = 'main';
 
@@ -326,6 +348,7 @@ export async function runInteractiveMenuAsync(): Promise<void> {
 
     if (action.type === 'exit') {
       Log.newLine();
+      exitAltScreen();
       return;
     }
 
@@ -348,12 +371,15 @@ export async function runInteractiveMenuAsync(): Promise<void> {
           continue;
         }
 
+        // Run commands in the normal scrollback screen.
+        exitAltScreen();
         const code = await runSelfAsync(argv);
         if (code !== 0) {
           Log.newLine();
           Log.warn(`Command exited with code ${code}`);
         }
         await pressAnyKeyToContinueAsync();
+        enterAltScreen();
         page = returnPage;
         continue;
       }
@@ -370,12 +396,15 @@ export async function runInteractiveMenuAsync(): Promise<void> {
         continue;
       }
 
+      // Run commands in the normal scrollback screen.
+      exitAltScreen();
       const code = await runSelfAsync(action.argv);
       if (code !== 0) {
         Log.newLine();
         Log.warn(`Command exited with code ${code}`);
       }
       await pressAnyKeyToContinueAsync();
+      enterAltScreen();
       page = returnPage;
     }
   }
